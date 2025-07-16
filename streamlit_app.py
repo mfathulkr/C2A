@@ -18,21 +18,28 @@ for dir_path in [AUDIO_CACHE_DIR, DB_SESSIONS_DIR]:
 
 def reset_session():
     """
-    Tüm oturum durumunu, önbelleği ve veritabanını temizler.
+    Tüm oturum durumunu, önbelleği ve **tüm eski veritabanı oturumlarını** temizler.
     Bu, "Yeni Analiz Başlat" düğmesi tarafından tetiklenir.
     """
-    print("Oturum sıfırlanıyor...")
+    print("Oturum ve tüm eski veriler sıfırlanıyor...")
     
-    # 1. Adım: Veritabanı yöneticisini güvenli bir şekilde kapat ve sil
+    # 1. Adım: Mevcut veritabanı yöneticisinin kaynaklarını serbest bırak (varsa)
+    # Bu, dosyaları silmeden önce bağlantıyı güvenli bir şekilde kapatır.
     if 'db_manager' in st.session_state and st.session_state.db_manager:
-        print("Mevcut veritabanı yöneticisi temizleniyor...")
-        st.session_state.db_manager.clear_database() # Bu metod artık önce kaynakları serbest bırakıyor
+        print("Mevcut veritabanı yöneticisi serbest bırakılıyor...")
+        st.session_state.db_manager.release()
 
-    # 2. Adım: Ses önbelleğini temizle
-    if os.path.exists(AUDIO_CACHE_DIR):
-        shutil.rmtree(AUDIO_CACHE_DIR)
-    os.makedirs(AUDIO_CACHE_DIR)
-
+    # 2. Adım: Önbellek ve Veritabanı klasörlerini tamamen silip yeniden oluştur
+    for dir_path in [AUDIO_CACHE_DIR, DB_SESSIONS_DIR]:
+        if os.path.exists(dir_path):
+            try:
+                shutil.rmtree(dir_path)
+                print(f"'{dir_path}' klasörü başarıyla silindi.")
+            except Exception as e:
+                print(f"HATA: '{dir_path}' silinirken bir hata oluştu: {e}")
+        os.makedirs(dir_path)
+        print(f"'{dir_path}' klasörü yeniden oluşturuldu.")
+    
     # 3. Adım: Streamlit oturum durumunu temizle
     # 'db_manager' dahil tüm anahtarları sil
     keys_to_delete = list(st.session_state.keys())
