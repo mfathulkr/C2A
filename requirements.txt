@@ -1,0 +1,22 @@
+# Temel Web ve Arayüz Kütüphaneleri
+streamlit
+
+# YouTube'dan ses indirmek için
+yt-dlp
+
+# LangChain Çekirdek Kütüphaneleri
+langchain
+langchain-core
+langchain-chroma
+langchain-ollama
+chromadb-client
+
+# Yapay Zeka Modelleri için
+ollama
+tiktoken
+
+# Ses İşleme ve Transkripsiyon
+soundfile
+torch
+# WhisperX'i doğrudan GitHub deposundan kurar
+git+https://github.com/m-bain/whisperX.git 
