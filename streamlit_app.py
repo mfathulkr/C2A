@@ -1,226 +1,160 @@
 import streamlit as st
 import os
 import shutil
-import uuid
-from src.ars.processor import AudioProcessor
-from src.ars.manager import VectorDBManager
+from src.ars import config, llm_setup, agent_factory
+from src.ars.processor import MediaProcessor
+from src.ars.manager import AIManager
 
-# --- Uygulama Başlangıç Yapılandırması ---
+st.set_page_config(layout="wide", page_title="ARS - Akıllı Raporlama Sistemi")
 
-# Gerekli klasörlerin var olduğundan emin ol.
-# NOT: Artık başlangıçta klasörleri silmiyoruz. Temizlik işlemi
-# kullanıcı tarafından tetiklenecektir.
-AUDIO_CACHE_DIR = "audio_cache"
-DB_SESSIONS_DIR = "db_sessions"
-for dir_path in [AUDIO_CACHE_DIR, DB_SESSIONS_DIR]:
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
+# --- Model ve İşlemci Yükleme (Cache ile) ---
+@st.cache_resource
+def load_resources():
+    """Gerekli olan modelleri ve işlemci sınıflarını yükler."""
+    with st.spinner("Yapay zeka modelleri ve kaynaklar hazırlanıyor..."):
+        llm = llm_setup.load_llm()
+        embedding_model = llm_setup.load_embedding_model()
+        media_processor = MediaProcessor()
+        ai_manager = AIManager(llm, embedding_model)
+        return llm, embedding_model, media_processor, ai_manager
 
-def reset_session():
-    """
-    Tüm oturum durumunu, önbelleği ve **tüm eski veritabanı oturumlarını** temizler.
-    Bu, "Yeni Analiz Başlat" düğmesi tarafından tetiklenir.
-    """
-    print("Oturum ve tüm eski veriler sıfırlanıyor...")
-    
-    # 1. Adım: Mevcut veritabanı yöneticisinin kaynaklarını serbest bırak (varsa)
-    # Bu, dosyaları silmeden önce bağlantıyı güvenli bir şekilde kapatır.
-    if 'db_manager' in st.session_state and st.session_state.db_manager:
-        print("Mevcut veritabanı yöneticisi serbest bırakılıyor...")
-        st.session_state.db_manager.release()
-
-    # 2. Adım: Önbellek ve Veritabanı klasörlerini tamamen silip yeniden oluştur
-    for dir_path in [AUDIO_CACHE_DIR, DB_SESSIONS_DIR]:
-        if os.path.exists(dir_path):
-            try:
-                shutil.rmtree(dir_path)
-                print(f"'{dir_path}' klasörü başarıyla silindi.")
-            except Exception as e:
-                print(f"HATA: '{dir_path}' silinirken bir hata oluştu: {e}")
-        os.makedirs(dir_path)
-        print(f"'{dir_path}' klasörü yeniden oluşturuldu.")
-    
-    # 3. Adım: Streamlit oturum durumunu temizle
-    # 'db_manager' dahil tüm anahtarları sil
-    keys_to_delete = list(st.session_state.keys())
-    for key in keys_to_delete:
-        del st.session_state[key]
-    
-    print("Oturum başarıyla sıfırlandı. Arayüz yeniden başlatılıyor.")
+# --- Oturum Temizleme ---
+def end_analysis_session():
+    """Tüm oturum durumunu ve geçici dosyaları temizler."""
+    st.session_state.clear()
+    if os.path.exists(config.SESSION_DATA_PATH):
+        shutil.rmtree(config.SESSION_DATA_PATH)
     st.rerun()
 
-# --- Sayfa Yapılandırması ---
-st.set_page_config(
-    page_title="Akıllı Raporlama Sistemi (ARS)",
-    page_icon="🤖",
-    layout="wide"
-)
+# --- Ana Uygulama ---
 
-# --- Kenar Çubuğu (Sidebar) ---
-with st.sidebar:
-    st.header("🤖 Akıllı Raporlama Sistemi")
-    st.markdown("""
-        Bu uygulama, ses dosyalarınızı veya YouTube videolarınızı metne dönüştürür,
-        içeriği özetler ve sorularınızı yanıtlar.
-    """)
-    
-    # Yeni Analiz butonu
-    st.button(
-        "Yeni Analiz Başlat",
-        on_click=reset_session,
-        type="primary",
-        use_container_width=True,
-        help="Mevcut oturumu, sohbeti ve yüklenen dosyayı temizleyerek uygulamayı sıfırlar."
-    )
+llm, embedding_model, media_processor, ai_manager = load_resources()
 
-    st.markdown("---")
-    
-    # Oturum durumu değişkenlerini, sadece tanımlı değillerse başlat.
-    # Bu, sayfa yenilendiğinde durumun kaybolmasını önler.
-    if 'session_id' not in st.session_state:
-        st.session_state.session_id = str(uuid.uuid4())
-    if 'processing_complete' not in st.session_state:
-        st.session_state.processing_complete = False
-    if 'db_manager' not in st.session_state:
-        st.session_state.db_manager = None
-    if 'messages' not in st.session_state:
-        st.session_state.messages = []
-    if 'report_text' not in st.session_state:
-        st.session_state.report_text = ""
-    if 'audio_path' not in st.session_state:
-        st.session_state.audio_path = ""
-    if 'source_info' not in st.session_state:
-        st.session_state.source_info = ""
+if 'screen' not in st.session_state:
+    st.session_state.screen = 'welcome'
 
-
-# --- Ana Başlık ve Açıklama ---
-st.title("🤖 Akıllı Raporlama Sistemi (ARS)")
-st.markdown("""
-Bu uygulama, sağladığınız bir ses/video kaynağından otomatik olarak metin transkripsiyonu oluşturur, 
-ardından bu metin üzerinden sorularınızı yanıtlar ve detaylı bir özet rapor sunar.
-
-**Nasıl Kullanılır?**
-1.  Aşağıdaki seçeneklerden birini kullanarak bir kaynak belirtin:
-    *   **Dosya Yükle:** Bilgisayarınızdan bir ses veya video dosyası (`mp3`, `wav`, `mp4` vb.) seçin.
-    *   **YouTube Linki:** Analiz etmek istediğiniz videonun YouTube linkini yapıştırın.
-2.  `İşle ve Analize Başla` butonuna tıklayın. İşlem süresi, kaynağın uzunluğuna bağlıdır.
-3.  İşlem tamamlandıktan sonra, alt kısımda belirecek olan sohbet arayüzünü ve raporlama seçeneklerini kullanın.
-""")
-
-
-# --- Girdi Alanları ---
-with st.container(border=True):
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        uploaded_file = st.file_uploader(
-            "Ses/Video Dosyası Yükleyin", 
-            type=['mp3', 'mp4', 'm4a', 'wav', 'flac']
-        )
+# 1. KARŞILAMA EKRANI
+if st.session_state.screen == 'welcome':
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        youtube_url = st.text_input("Veya YouTube Linki Yapıştırın")
-    
-    st.write("") # Boşluk için
-    
-    if st.button("İşle ve Analize Başla", type="primary", use_container_width=True):
-        source_provided = uploaded_file is not None or (youtube_url and youtube_url.strip())
-        
-        if not source_provided:
-            st.error("Lütfen bir dosya yükleyin veya bir YouTube linki girin.")
-        else:
-            with st.spinner("Lütfen bekleyin... Bu işlem kaynağın uzunluğuna göre zaman alabilir."):
-                # 1. Önceki oturumu temizle
-                if st.session_state.db_manager is not None:
-                    st.session_state.db_manager.clear_database()
-                
-                # 2. Yeni oturum için başlangıç
-                st.session_state.session_id = str(uuid.uuid4())
-                st.session_state.processing_complete = False
-                st.session_state.messages = []
-                st.session_state.report_text = ""
-                
-                audio_processor = AudioProcessor()
-
-                # 3. Kaynağı işle
-                if uploaded_file:
-                    st.session_state.audio_path = audio_processor.process_uploaded_file(uploaded_file)
-                    st.session_state.source_info = uploaded_file.name
-                elif youtube_url:
-                    st.session_state.audio_path = audio_processor.process_youtube_url(youtube_url)
-                    st.session_state.source_info = youtube_url
-                
-                # 4. Transkripsiyonu çalıştır
-                segments = audio_processor.run_transcription(st.session_state.audio_path)
-                
-                if segments:
-                    # 5. Veritabanını oluştur ve verileri işle
-                    st.session_state.db_manager = VectorDBManager(st.session_state.session_id)
-                    st.session_state.db_manager.ingest_segments(segments, os.path.basename(st.session_state.audio_path))
-                    st.session_state.processing_complete = True
-                    st.success("Dosya başarıyla işlendi! Artık soru sorabilir veya rapor oluşturabilirsiniz.")
-                else:
-                    st.error("Ses dosyasından metin çıkarılamadı. Lütfen dosyayı kontrol edin.")
-            
-            # Sayfayı yeniden çizerek sohbet/rapor alanlarını göster
+        st.markdown("<h1 style='text-align: center; font-size: 80px;'>ARS</h1>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center;'>Akıllı Raporlama Sistemi</h3>", unsafe_allow_html=True)
+        st.markdown("---")
+        if st.button("Yeni Analiz Başlat", use_container_width=True, type="primary"):
+            st.session_state.screen = 'setup'
             st.rerun()
 
+# 2. ANALİZ KURULUM EKRANI
+elif st.session_state.screen == 'setup':
+    st.title("1. Adım: Analiz Kaynağını Belirleyin")
+    source_option = st.radio("Kaynak Tipi:", ["Bilgisayardan Dosya Yükle", "YouTube Linki Kullan"], horizontal=True, label_visibility="collapsed")
+    
+    uploaded_file = None
+    youtube_url = None
 
-# --- Analiz Sonrası Arayüz (Sadece işlem bittiyse görünür) ---
-if st.session_state.get('processing_complete', False):
-    st.divider()
-    st.subheader(f"Analiz Edilen Kaynak: `{st.session_state.get('source_info', 'Bilinmiyor')}`")
+    if source_option == "Bilgisayardan Dosya Yükle":
+        uploaded_file = st.file_uploader("Desteklenen Formatlar: mp3, mp4, m4a, wav", type=["mp3", "mp4", "m4a", "wav"], label_visibility="collapsed")
+    else:
+        youtube_url = st.text_input("YouTube video linkini buraya yapıştırın:")
 
-    # --- Raporlama ve İndirme Bölümü ---
-    with st.container(border=True):
-        st.subheader("📝 Raporlama")
+    st.write("---")
+
+    if (uploaded_file or (youtube_url and ("youtube.com" in youtube_url or "youtu.be" in youtube_url))):
+        if st.button("Analizi Başlat", type="primary", use_container_width=True):
+            st.session_state.uploaded_file = uploaded_file
+            st.session_state.youtube_url = youtube_url
+            st.session_state.screen = 'processing'
+            st.rerun()
+            
+    if st.button("Geri"):
+        st.session_state.screen = 'welcome'
+        st.rerun()
+
+# 3. İŞLEME EKRANI
+elif st.session_state.screen == 'processing':
+    with st.status("Analiz süreci yürütülüyor...", expanded=True) as status:
+        try:
+            # Temizlik
+            status.update(label="Eski analiz verileri temizleniyor...")
+            if os.path.exists(config.SESSION_DATA_PATH):
+                shutil.rmtree(config.SESSION_DATA_PATH)
+            os.makedirs(config.AUDIO_CACHE_PATH, exist_ok=True)
+            
+            # Kaynak işleme (İndirme veya Kaydetme)
+            audio_path = ""
+            uploaded_file = st.session_state.get("uploaded_file")
+            youtube_url = st.session_state.get("youtube_url")
+
+            if uploaded_file:
+                status.update(label=f"'{uploaded_file.name}' dosyası kaydediliyor...")
+                file_path = os.path.join(config.AUDIO_CACHE_PATH, uploaded_file.name)
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                audio_path = file_path
+            elif youtube_url:
+                status.update(label="YouTube'dan ses indiriliyor...")
+                audio_path = media_processor.download_audio_from_youtube(youtube_url)
+
+            # Transkripsiyon ve Hizalama
+            status.update(label="Ses metne dönüştürülüyor (WhisperX)...")
+            whisperx_result = media_processor.transcribe_and_align(audio_path)
+            
+            # Veritabanlarını Doldurma ve Metni Parçalama
+            status.update(label="Metin işleniyor ve veritabanları oluşturuluyor...")
+            # populate_databases şimdi parçalanmış dökümanları döndürecek
+            chunks = ai_manager.populate_databases(whisperx_result) 
+            st.session_state.chunks = chunks # Raporlama için parçaları kaydet
+
+            # Agent ve Raporlama Zincirini Oluşturma
+            status.update(label="Analiz araçları hazırlanıyor...")
+            st.session_state.agent_executor = agent_factory.create_agent(llm, embedding_model)
+            # Eski basit zincir yerine map_reduce zincirini oluştur
+            st.session_state.reporting_chain = agent_factory.create_map_reduce_chain(llm)
+            st.session_state.messages = [{"role": "assistant", "content": "Analiz tamamlandı. Kayıt hakkında sorularınızı sorabilir veya bir rapor oluşturmasını isteyebilirsiniz."}]
+            
+            status.update(label="Analiz başarıyla tamamlandı!", state="complete")
+            st.session_state.screen = 'analysis'
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Analiz sırasında bir hata oluştu: {e}")
+            if st.button("Başa Dön"):
+                end_analysis_session()
+
+# 4. ANALİZ EKRANI (CHAT & RAPORLAMA)
+elif st.session_state.screen == 'analysis':
+    st.sidebar.title("Kontrol Paneli")
+    st.sidebar.button("Yeni Analiz Yap", on_click=end_analysis_session, use_container_width=True)
+    
+    st.title("Akıllı Raporlama Sistemi - Analiz Ekranı")
+
+    with st.expander("Tutanak Raporu Oluşturucu", expanded=False):
+        if st.button("Toplantı Tutanağı Oluştur", use_container_width=True):
+            with st.spinner("Tutanak raporu hazırlanıyor (Bu işlem uzun sürebilir)..."):
+                # Map-Reduce zincirini parçalanmış dökümanlarla çağır
+                response = st.session_state.reporting_chain.invoke({"input_documents": st.session_state.chunks})
+                st.session_state.report = response["output_text"]
+    
+    if "report" in st.session_state:
+        st.markdown("---")
+        st.subheader("Oluşturulan Rapor")
+        st.markdown(st.session_state.report)
+        st.download_button("Raporu İndir (.md)", st.session_state.report, "tutanak_raporu.md", "text/markdown")
         
-        if st.button("Detaylı Rapor Oluştur", use_container_width=True):
-            with st.spinner("Rapor oluşturuluyor... (Bu işlem birkaç dakika sürebilir)"):
-                if st.session_state.get('db_manager'):
-                    st.session_state.report_text = st.session_state.db_manager.generate_report()
-                else:
-                    st.session_state.report_text = "Veritabanı yöneticisi bulunamadı. Lütfen tekrar deneyin."
-        
-        if st.session_state.get('report_text'):
-            st.markdown(st.session_state.report_text)
-            
-            # Kaynak adından güvenli bir dosya adı oluştur
-            source_name = st.session_state.get('source_info', 'kaynak')
-            safe_filename = "".join([c for c in source_name if c.isalpha() or c.isdigit() or c in (' ', '-')]).rstrip()
-            
-            st.download_button(
-                label="Raporu .md olarak İndir",
-                data=st.session_state.report_text,
-                file_name=f"report_{safe_filename}.md",
-                mime="text/markdown",
-                use_container_width=True
-            )
+    st.markdown("---")
+    st.subheader("Kayıt ile Sohbet Et")
 
-    # --- Sohbet Arayüzü Bölümü ---
-    with st.container(border=True):
-        st.subheader("💬 Döküman ile Sohbet Et")
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-        # Sohbet geçmişini göster
-        for message in st.session_state.get('messages', []):
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    if prompt := st.chat_input("Sorunuzu buraya yazın..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-        # Kullanıcıdan yeni soru al
-        if prompt := st.chat_input("Döküman hakkında bir soru sorun..."):
-            st.session_state.setdefault('messages', []).append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            # AI cevabını al ve göster
-            with st.chat_message("assistant"):
-                with st.spinner("Düşünüyorum..."):
-                    if st.session_state.get('db_manager'):
-                        rag_chain = st.session_state.db_manager.get_rag_chain()
-                        response = rag_chain.invoke(prompt)
-                        st.markdown(response)
-                    else:
-                        response = "Sohbet başlatılamadı, veritabanı yöneticisi hazır değil."
-                        st.markdown(response)
-            
-            # Cevabı sohbet geçmişine ekle
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun() # Sohbet sonrası arayüzü yenile 
+        with st.chat_message("assistant"):
+            with st.spinner("Düşünüyorum..."):
+                response = st.session_state.agent_executor.invoke({"input": prompt})
+                st.markdown(response["output"])
+                st.session_state.messages.append({"role": "assistant", "content": response["output"]}) 

@@ -1,17 +1,18 @@
-# Akıllı Raporlama Sistemi (ARS)
+# Akıllı Raporlama Sistemi (ARS) - Gelişmiş Graf ve Map-Reduce Entegrasyonu
 
-Bu proje, bir ses/video dosyasını veya YouTube linkini analiz ederek, içeriğini metne dönüştüren ve bu metin üzerinden yapay zeka tabanlı detaylı raporlama ve sohbet imkanı sunan bir web uygulamasıdır. Tüm işlemler, veri gizliliğini ön planda tutarak kullanıcının kendi bilgisayarında yerel olarak çalışır.
-
-![Uygulama Arayüzü](docs/GUI.md)
+Bu proje, bir YouTube bağlantısını veya yerel bir ses dosyasını analiz ederek, içeriğini metne dönüştüren ve bu metin üzerinden yapay zeka tabanlı, **hibrit (Vektör + Graf)** sorgulama ve **uzun metinler için özetleme/raporlama** imkanı sunan bir web uygulamasıdır. Tüm işlemler, veri gizliliğini ön planda tutarak kullanıcının kendi bilgisayarında yerel olarak çalışır.
 
 ## Teknoloji Mimarisi
 
 - **Arayüz:** Streamlit
 - **Arka Plan Mantığı:** Python
-- **STT (Sesi Metne Çevirme):** `WhisperX` (Kelime-seviyesinde zaman damgası için)
-- **Yapay Zeka (LLM & Embeddings):** `Ollama` (Llama 3 ile)
-- **Vektör Veritabanı:** `ChromaDB`
-- **Orkestrasyon:** `LangChain`
+- **Video/Ses İndirme:** `yt-dlp`
+- **STT (Sesi Metne Çevirme):** `openai-whisper`
+- **Yapay Zeka (LLM & Embeddings):** `langchain`, `transformers` ve `sentence-transformers` (Hugging Face tabanlı)
+- **Hibrit Veri Depolama:**
+    - **Vektör Veritabanı:** `ChromaDB` (Anlamsal arama için)
+    - **Graf Veritabanı:** `Neo4j` (İlişkisel sorgulama için)
+- **Orkestrasyon & Mimariler:** `LangChain` (ReAct Agent, Map-Reduce Chain)
 
 ---
 
@@ -19,73 +20,42 @@ Bu proje, bir ses/video dosyasını veya YouTube linkini analiz ederek, içeriğ
 
 Bu uygulamanın çalışması için bazı ön gereksinimler ve dikkatli bir kurulum süreci gerekmektedir. Lütfen adımları sırasıyla takip edin.
 
-### 1. Ön Gereksinim: NVIDIA Sürücüleri (GPU Kullanıcıları için)
+### 1. Ön Gereksinimler
 
-Eğer uygulamanın transkripsiyon hızından tam olarak faydalanmak istiyorsanız, NVIDIA ekran kartınızın güncel sürücülerinin kurulu olduğundan emin olun.
+- **NVIDIA Sürücüleri & CUDA (GPU Kullanıcıları için):** Eğer uygulamanın yapay zeka ve transkripsiyon hızından tam olarak faydalanmak istiyorsanız, NVIDIA ekran kartınızın güncel sürücülerinin ve [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive)'in kurulu olduğundan emin olun. Bu, `torch` kütüphanesinin GPU'nuzu tanımasını sağlar ve işlemleri büyük ölçüde hızlandırır.
+- **ffmpeg:** Whisper'ın çeşitli ses formatlarını işleyebilmesi ve `yt-dlp`'nin indirme sonrası ses formatı dönüşümü yapabilmesi için gereklidir.
+  - **Windows (Chocolatey ile):** `choco install ffmpeg`
+  - **Linux (apt ile):** `sudo apt-get install ffmpeg`
+  - **macOS (Homebrew ile):** `brew install ffmpeg`
+- **Neo4j Desktop:** Neo4j veritabanını yerel olarak çalıştırmak için [Neo4j Desktop](https://neo4j.com/download/)'ı kurun.
+  1. Kurduktan sonra yeni bir proje oluşturun.
+  2. Proje içinde "Add Database" seçeneği ile yeni bir veritabanı (DBMS) oluşturun.
+  3. Oluşturduğunuz bu veritabanının **aktif (running)** durumda olduğundan emin olun.
+  4. Bu veritabanını kurarken belirlediğiniz şifreyi, projedeki `src/ars/config.py` dosyasında bulunan `NEO4J_PASSWORD` değişkenine atayın. URI ve kullanıcı adı varsayılan (`neo4j://localhost:7687` ve `neo4j`) olarak bırakılmıştır.
 
-### 2. Ollama Kurulumu ve Modelleri
+### 2. Python Ortamı ve Bağımlılıklar
 
-Uygulamanın yapay zeka yetenekleri için Ollama gereklidir.
+Projenin, kütüphane çakışmalarını önlemek için izole bir sanal ortamda çalıştırılması şiddetle tavsiye edilir.
 
-1.  **Ollama'yı İndirin:** [Ollama'nın resmi web sitesine](https://ollama.com/) gidin ve işletim sisteminize uygun versiyonu indirip kurun.
-2.  **Modelleri İndirin:** Kurulum tamamlandıktan sonra, terminali (veya PowerShell/CMD'yi) açın ve aşağıdaki komutları çalıştırarak gerekli yapay zeka modellerini bilgisayarınıza indirin:
-
-    ```bash
-    ollama pull llama3:8b
-    ollama pull nomic-embed-text
-    ```
-
-    Bu işlem, modellerin boyutuna ve internet hızınıza bağlı olarak zaman alabilir.
-
-### 3. Conda Ortamı ve Bağımlılıklar
-
-Proje, izole bir Conda ortamında çalışacak şekilde tasarlanmıştır.
-
-1.  **Conda'yı Kurun:** Eğer sisteminizde Conda kurulu değilse, [Miniconda](https://docs.conda.io/projects/miniconda/en/latest/) (önerilen) veya Anaconda'yı kurun.
-
-2.  **Conda Ortamını Oluşturun:**
-    Terminalde proje ana dizinine gidin ve aşağıdaki komutla `ars` adında yeni bir Conda ortamı oluşturun:
-
+1.  **Ortam Oluşturma ve Aktive Etme (Örnek: Conda):**
     ```bash
     conda create --name ars python=3.10 -y
-    ```
-
-3.  **Ortamı Aktive Edin:**
-
-    ```bash
     conda activate ars
     ```
 
-4.  **GPU için Kritik Kütüphaneleri Kurun (PyTorch & CUDA):**
-    WhisperX'in GPU üzerinde verimli çalışabilmesi için PyTorch'un doğru CUDA versiyonu ile kurulması çok önemlidir.
-    - **NVIDIA GPU'nuzun desteklediği CUDA sürümünü kontrol edin (`nvidia-smi` komutu ile).**
-    - PyTorch'un [resmi web sitesine](https://pytorch.org/get-started/locally/) gidin ve sisteminize uygun kurulum komutunu (genellikle `conda install ...` ile başlar) alın. Örneğin, CUDA 12.1 için komut genellikle şöyledir:
-    
-    ```bash
-    # Örnek (Kendi CUDA sürümünüze göre bunu güncelleyin!)
-    conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia -y
-    ```
-    Bu komut, PyTorch ile birlikte doğru `cudatoolkit` ve `cudnn` versiyonlarını da kuracaktır. **Bu adımı atlamayın!**
-
-5.  **Gerekli Diğer Kütüphaneleri Kurun:**
-    Proje ana dizininde olduğunuzdan emin olarak, `requirements.txt` dosyasındaki diğer bağımlılıkları `pip` ile kurun:
+2.  **Gerekli Kütüphaneleri Kurma:**
+    Proje ana dizininde olduğunuzdan emin olarak, `requirements.txt` dosyasındaki tüm bağımlılıkları `pip` ile kurun:
 
     ```bash
     pip install -r requirements.txt
     ```
-
-6.  **`ffmpeg` Kurulumu:**
-    Ses dosyalarını işlemek için `ffmpeg` gereklidir. Bunu da Conda ile kolayca kurabilirsiniz:
-    
-    ```bash
-    conda install -c conda-forge ffmpeg -y
-    ```
+    *Not: `torch` kütüphanesinin kurulumu donanımınıza (CPU/GPU) göre farklılık gösterebilir. En iyi performans için PyTorch'un resmi sitesinden sisteminize uygun (özellikle CUDA versiyonunuza) `torch` kurulum komutunu alıp onu çalıştırmanız önerilir.*
 
 ---
 
 ## Uygulamayı Çalıştırma
 
-Tüm kurulum adımları tamamlandıktan sonra, `ars` Conda ortamının aktif olduğundan emin olun ve proje ana dizininde aşağıdaki komutu çalıştırın:
+Tüm kurulum adımları tamamlandıktan sonra, Python ortamınızın aktif olduğundan emin olun ve proje ana dizininde aşağıdaki komutu çalıştırın:
 
 ```bash
 streamlit run streamlit_app.py
@@ -93,30 +63,48 @@ streamlit run streamlit_app.py
 
 Bu komut, varsayılan web tarayıcınızda uygulamanın arayüzünü açacaktır.
 
-## Nasıl Kullanılır?
+---
 
-1.  **Kaynak Belirleme:**
-    - **Dosya Yükle:** Bilgisayarınızdan bir ses veya video dosyası (`mp3`, `wav`, `mp4` vb.) seçin.
-    - **YouTube Linki:** Analiz etmek istediğiniz videonun YouTube linkini yapıştırın.
+## Teknik İş Akışı ve Kullanım
 
-2.  **Analizi Başlatma:**
-    - `İşle ve Analize Başla` butonuna tıklayın. Bu işlem, kaynağın uzunluğuna ve donanımınızın gücüne (özellikle GPU) bağlı olarak birkaç dakika sürebilir. Arka planda ses metne dönüştürülür ve veritabanı oluşturulur.
+### Analiz Süreci
+1.  **Girdi Sağlama:** Kenar çubuğundaki (sidebar) metin kutusuna bir YouTube linki yapıştırın veya bir ses/video dosyası yükleyin.
+2.  **Analizi Başlatma:** `Yeni Analiz Başlat` butonuna tıklayın. Bu işlem, mevcut oturum verilerini (varsa) temizleyecek ve yeni bir analiz süreci başlatacaktır. Arka planda aşağıdaki adımlar otomatik olarak yürütülür:
+    - **Ses Elde Etme (`processor.py`):** YouTube linki verilmişse `yt-dlp` ile en iyi kalitedeki ses indirilir. Dosya yüklenmişse doğrudan kullanılır.
+    - **Transkripsiyon (`processor.py`):** `openai-whisper` modeli kullanılarak ses dosyası metne dönüştürülür.
+    - **Veri İşleme ve Depolama (`manager.py`):**
+        - Oluşturulan uzun metin, `LangChain` kullanılarak daha küçük, yönetilebilir parçalara (`chunks`) bölünür.
+        - Her bir metin parçasından, bir LLM (Dil Modeli) aracılığıyla anlamsal ilişkileri temsil eden **bilgi üçlüleri** (Özne-İlişki-Nesne) çıkarılır.
+        - Bu üçlüler temizlenir (boş değerler ayıklanır) ve Neo4j veritabanına `MERGE` sorgularıyla yüklenir, böylece bir bilgi grafiği (knowledge graph) oluşturulur.
+        - Aynı metin parçaları, bir `embedding` modeli kullanılarak vektörleştirilir ve anlamsal arama için ChromaDB veritabanına yüklenir.
 
-3.  **Sonuçları İnceleme:**
-    - İşlem tamamlandığında sayfanın alt kısmında iki ana bölüm belirir:
-      - **📝 Raporlama:** `Detaylı Rapor Oluştur` butonu ile tüm metnin kapsamlı bir analizini alabilirsiniz. Rapor, içeriğe göre "Alınan Kararlar" veya "Ulaşılan Sonuçlar" gibi başlıkları akıllıca doldurur.
-      - **💬 Döküman ile Sohbet Et:** Metin içeriği hakkında spesifik sorular sorabileceğiniz bir sohbet arayüzüdür. Örneğin: "Projenin bütçesi hakkında ne konuşuldu?" veya "Sam Altman'ın AGI hakkındaki temel argümanı neydi?".
+### Etkileşim Süreci
+Analiz tamamlandığında arayüzde iki ana fonksiyon aktif hale gelir:
 
-4.  **Yeni Analiz:**
-    - Farklı bir dosyayı analiz etmek için kenar çubuğundaki `Yeni Analiz Başlat` butonuna tıklayarak mevcut oturumu ve verileri temizleyebilirsiniz.
+1.  **Rapor Oluşturma:**
+    - **Ne işe yarar?** Tüm metnin genel bir özetini veya raporunu almak için kullanılır. Özellikle uzun (saatler süren) ses dosyaları için idealdir.
+    - **Nasıl çalışır? (`agent_factory.py` - `create_map_reduce_chain`):** Bu özellik, `Map-Reduce` mimarisini kullanır.
+        - **Map Adımı:** Metnin her bir parçası (chunk) ayrı ayrı LLM'e gönderilerek özetlenir.
+        - **Reduce Adımı:** Elde edilen bu ara özetler birleştirilir ve nihai, tutarlı bir rapor oluşturmak için tekrar LLM'e gönderilir. Bu yöntem, LLM'lerin bağlam penceresi (context window) limitini aşma sorununu çözer.
+
+2.  **Hibrit Agent ile Sohbet:**
+    - **Ne işe yarar?** Metin içeriği hakkında spesifik sorular sormak için kullanılır. Agent, sorunuzun doğasına göre en uygun aracı kendi seçer.
+    - **Nasıl çalışır? (`agent_factory.py` - `create_conversational_agent`):** Bu, `LangChain ReAct` (Reasoning and Acting) ajanıdır ve iki güçlü araca sahiptir:
+        - **Graf Aracı (Neo4j):** "X ve Y arasındaki ilişki nedir?", "A projesinde kimler çalıştı?" gibi net, ilişkisel ve yapısal sorular için Neo4j graf veritabanını sorgular.
+        - **Vektör Aracı (ChromaDB):** "Yapay zekanın etik sorunları hakkında ne gibi yorumlar yapıldı?" gibi anlamsal veya kavramsal sorular için ChromaDB'de vektör araması yapar.
+    - Agent, sorduğunuz soruyu anlar, hangi aracın en doğru cevabı vereceğini planlar, o aracı kullanır ve gelen sonucu size anlamlı bir cevap olarak sunar. Bazen her iki araçtan gelen bilgiyi birleştirerek daha kapsamlı bir yanıt da oluşturabilir.
 
 ---
 
 ## Proje Mimarisi
 
-Proje, görevleri mantıksal modüllere ayıran bir yapıya sahiptir:
+Proje, görevleri mantıksal modüllere ayıran modüler bir yapıya sahiptir (`src/ars/` altında):
 
-- `streamlit_app.py`: Kullanıcı arayüzünü oluşturan ve iş akışını yöneten ana betik.
-- `src/ars/config.py`: Tüm yapılandırma ayarlarının (model adları, prompt şablonları vb.) bulunduğu merkezi dosya.
-- `src/ars/processor.py`: "Kirli" işlerden sorumlu modül. YouTube'dan indirme, dosya kaydetme ve `WhisperX` ile transkripsiyon işlemlerini yürütür.
-- `src/ars/manager.py`: "Temiz" yapay zeka işlerinden sorumlu modül. `ChromaDB` ile vektör veritabanını yönetir, metinleri işler ve `LangChain` aracılığıyla raporlama ve sohbet zincirlerini oluşturur. 
+- `streamlit_app.py`: Kullanıcı arayüzünü oluşturan ve `manager` ile `agent_factory` modüllerini çağırarak tüm iş akışını yöneten ana betik.
+- `config.py`: Tüm yapılandırma ayarlarının (veritabanı bağlantıları, model adları, dosya yolları, istemler/prompts) bulunduğu merkezi dosya.
+- `llm_setup.py`: Hugging Face'den LLM ve embedding modellerini (örn: `sentence-transformers`) yükleyen ve yapılandıran modül.
+- `processor.py`: `yt-dlp` ile ses indirme ve `openai-whisper` ile sesi metne dönüştürme (transkripsiyon) işlemlerini yürütür.
+- `manager.py`: Transkripsiyon sonrası tüm veri işleme hattını yönetir. Metni parçalara ayırır, LLM kullanarak üçlüleri çıkartır ve hem Neo4j'yi hem de ChromaDB'yi doldurur.
+- `agent_factory.py`: LangChain kullanarak uygulamanın iki ana zeka merkezini oluşturan modül:
+    1.  Uzun metinler için `Map-Reduce` özetleme zinciri (`create_map_reduce_chain`).
+    2.  Hibrit, araç-kullanabilen Q&A ajanı (`create_conversational_agent`). 

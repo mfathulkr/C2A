@@ -1,22 +1,33 @@
-# Temel Web ve Arayüz Kütüphaneleri
+# Ses İşleme & Transkripsiyon
+# openai-whisper yerine daha gelişmiş olan whisperx kullanılıyor.
+whisperx @ git+https://github.com/m-bain/whisperx.git
+faster-whisper
+yt-dlp
+ffmpeg-python
+
+# Web Arayüzü
 streamlit
 
-# YouTube'dan ses indirmek için
-yt-dlp
-
-# LangChain Çekirdek Kütüphaneleri
+# LangChain Çekirdek ve Entegrasyonlar
 langchain
+langchain-community
 langchain-core
-langchain-chroma
+langchain-neo4j
 langchain-ollama
-chromadb-client
+langchain-huggingface
 
-# Yapay Zeka Modelleri için
-ollama
-tiktoken
+# Veritabanları
+chromadb
+neo4j
 
-# Ses İşleme ve Transkripsiyon
-soundfile
-torch
-# WhisperX'i doğrudan GitHub deposundan kurar
-git+https://github.com/m-bain/whisperX.git 
+# LLM ve GPU Desteği
+# Artık bu ağır kütüphanelere gerek yok, Ollama kullanılıyor.
+# transformers
+# accelerate
+# bitsandbytes
+# torch
+# sentence-transformers
+openai # Bu, langchain-neo4j'nin bir alt bağımlılığı için gereklidir
+
+# Döküman İşleme
+langchain_text_splitters
