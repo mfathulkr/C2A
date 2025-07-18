@@ -54,32 +54,43 @@ class MediaProcessor:
 
     def transcribe_and_align(self, audio_path: str) -> dict:
         """
-        WhisperX kullanarak verilen ses dosyasını metne dönüştürür, hizalar ve hoparlörleri ayrıştırır.
-        Sonuç olarak kelime seviyesinde zaman damgaları içeren bir sözlük döndürür.
+        WhisperX kullanarak verilen ses dosyasını metne dönüştürür.
+        Hizalama ve hoparlör ayrıştırma adımlarını dener, başarısız olursa atlar.
         """
         # 1. Modeli Yükle
         print(f"WhisperX modeli yükleniyor (model={config.WHISPER_MODEL_SIZE}, cihaz={self.device})...")
         model = whisperx.load_model(config.WHISPER_MODEL_SIZE, self.device, compute_type=self.compute_type)
 
-        # 2. Transkripsiyon
+        # 2. Transkripsiyon (Ana İşlem)
         print("Transkripsiyon başlatıldı...")
         audio = whisperx.load_audio(audio_path)
         result = model.transcribe(audio, batch_size=config.WHISPER_BATCH_SIZE)
+        print("Transkripsiyon başarıyla tamamlandı.")
 
-        # 3. Hizalama (Alignment)
-        print("Metin hizalama başlatıldı...")
-        align_model, metadata = whisperx.load_align_model(language_code=result["language"], device=self.device)
-        aligned_result = whisperx.align(result["segments"], align_model, metadata, audio, self.device, return_char_alignments=False)
-        
-        # 4. Hoparlör Ayrıştırma (Diarization) - API Anahtarı Gerekli
-        if config.HF_TOKEN:
-            print("Hoparlör ayrıştırma başlatıldı...")
-            diarize_model = whisperx.DiarizationPipeline(use_auth_token=config.HF_TOKEN, device=self.device)
-            diarize_segments = diarize_model(audio, min_speakers=config.MIN_SPEAKERS, max_speakers=config.MAX_SPEAKERS)
-            final_result = whisperx.assign_word_speakers(diarize_segments, aligned_result)
-        else:
-            print("Hugging Face API anahtarı bulunmadığı için hoparlör ayrıştırma atlandı.")
-            final_result = aligned_result
+        # 3. Hizalama ve Ayrıştırmayı Dene (Hata verebilecek kısım)
+        try:
+            # 3a. Hizalama (Alignment)
+            print("Metin hizalama deneniyor...")
+            align_model, metadata = whisperx.load_align_model(language_code=result["language"], device=self.device)
+            aligned_result = whisperx.align(result["segments"], align_model, metadata, audio, self.device, return_char_alignments=False)
+            print("Metin hizalama başarılı.")
 
-        print("Transkripsiyon, hizalama ve ayrıştırma tamamlandı.")
-        return final_result 
+            # 3b. Hoparlör Ayrıştırma (Diarization)
+            if config.HF_TOKEN:
+                print("Hoparlör ayrıştırma deneniyor...")
+                diarize_model = whisperx.DiarizationPipeline(use_auth_token=config.HF_TOKEN, device=self.device)
+                diarize_segments = diarize_model(audio, min_speakers=config.MIN_SPEAKERS, max_speakers=config.MAX_SPEAKERS)
+                final_result = whisperx.assign_word_speakers(diarize_segments, aligned_result)
+                print("Hoparlör ayrıştırma başarılı.")
+            else:
+                print("Hugging Face API anahtarı bulunmadığı için hoparlör ayrıştırma atlandı.")
+                final_result = aligned_result
+
+            return final_result
+
+        except Exception as e:
+            print(f"--> UYARI: Metin hizalama veya hoparlör ayrıştırma başarısız oldu. Hata: {e}")
+            print("--> Sadece ham transkripsiyon metni ile devam ediliyor.")
+            # Hata durumunda, sadece ana transkripsiyon sonucunu döndür.
+            # AIManager'ın beklediği formatta olması için 'segments' anahtarı ekliyoruz.
+            return {"segments": result["segments"]}

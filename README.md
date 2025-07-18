@@ -7,7 +7,7 @@ Bu proje, bir YouTube bağlantısını veya yerel bir ses dosyasını analiz ede
 - **Arayüz:** Streamlit
 - **Arka Plan Mantığı:** Python
 - **Video/Ses İndirme:** `yt-dlp`
-- **STT (Sesi Metne Çevirme):** `openai-whisper`
+- **STT (Sesi Metne Çevirme):** `WhisperX` (Hizalama ve hoparlör ayrıştırma yetenekleriyle)
 - **Yapay Zeka (LLM & Embeddings):** `langchain`, `transformers` ve `sentence-transformers` (Hugging Face tabanlı)
 - **Hibrit Veri Depolama:**
     - **Vektör Veritabanı:** `ChromaDB` (Anlamsal arama için)
@@ -71,7 +71,7 @@ Bu komut, varsayılan web tarayıcınızda uygulamanın arayüzünü açacaktır
 1.  **Girdi Sağlama:** Kenar çubuğundaki (sidebar) metin kutusuna bir YouTube linki yapıştırın veya bir ses/video dosyası yükleyin.
 2.  **Analizi Başlatma:** `Yeni Analiz Başlat` butonuna tıklayın. Bu işlem, mevcut oturum verilerini (varsa) temizleyecek ve yeni bir analiz süreci başlatacaktır. Arka planda aşağıdaki adımlar otomatik olarak yürütülür:
     - **Ses Elde Etme (`processor.py`):** YouTube linki verilmişse `yt-dlp` ile en iyi kalitedeki ses indirilir. Dosya yüklenmişse doğrudan kullanılır.
-    - **Transkripsiyon (`processor.py`):** `openai-whisper` modeli kullanılarak ses dosyası metne dönüştürülür.
+    - **Transkripsiyon (`processor.py`):** `WhisperX` modeli kullanılarak ses dosyası metne dönüştürülür. Bu model, kelime seviyesinde zaman damgaları (alignment) ve hoparlör etiketleme (diarization) gibi gelişmiş özellikler sunarak metnin daha zengin ve analiz edilebilir olmasını sağlar.
     - **Veri İşleme ve Depolama (`manager.py`):**
         - Oluşturulan uzun metin, `LangChain` kullanılarak daha küçük, yönetilebilir parçalara (`chunks`) bölünür.
         - Her bir metin parçasından, bir LLM (Dil Modeli) aracılığıyla anlamsal ilişkileri temsil eden **bilgi üçlüleri** (Özne-İlişki-Nesne) çıkarılır.
@@ -89,7 +89,7 @@ Analiz tamamlandığında arayüzde iki ana fonksiyon aktif hale gelir:
 
 2.  **Hibrit Agent ile Sohbet:**
     - **Ne işe yarar?** Metin içeriği hakkında spesifik sorular sormak için kullanılır. Agent, sorunuzun doğasına göre en uygun aracı kendi seçer.
-    - **Nasıl çalışır? (`agent_factory.py` - `create_conversational_agent`):** Bu, `LangChain ReAct` (Reasoning and Acting) ajanıdır ve iki güçlü araca sahiptir:
+    - **Nasıl çalışır? (`agent_factory.py` - `create_agent`):** Bu, `LangChain ReAct` (Reasoning and Acting) ajanıdır ve iki güçlü araca sahiptir:
         - **Graf Aracı (Neo4j):** "X ve Y arasındaki ilişki nedir?", "A projesinde kimler çalıştı?" gibi net, ilişkisel ve yapısal sorular için Neo4j graf veritabanını sorgular.
         - **Vektör Aracı (ChromaDB):** "Yapay zekanın etik sorunları hakkında ne gibi yorumlar yapıldı?" gibi anlamsal veya kavramsal sorular için ChromaDB'de vektör araması yapar.
     - Agent, sorduğunuz soruyu anlar, hangi aracın en doğru cevabı vereceğini planlar, o aracı kullanır ve gelen sonucu size anlamlı bir cevap olarak sunar. Bazen her iki araçtan gelen bilgiyi birleştirerek daha kapsamlı bir yanıt da oluşturabilir.
@@ -107,4 +107,4 @@ Proje, görevleri mantıksal modüllere ayıran modüler bir yapıya sahiptir (`
 - `manager.py`: Transkripsiyon sonrası tüm veri işleme hattını yönetir. Metni parçalara ayırır, LLM kullanarak üçlüleri çıkartır ve hem Neo4j'yi hem de ChromaDB'yi doldurur.
 - `agent_factory.py`: LangChain kullanarak uygulamanın iki ana zeka merkezini oluşturan modül:
     1.  Uzun metinler için `Map-Reduce` özetleme zinciri (`create_map_reduce_chain`).
-    2.  Hibrit, araç-kullanabilen Q&A ajanı (`create_conversational_agent`). 
+    2.  Hibrit, araç-kullanabilen Q&A ajanı (`create_agent`). 

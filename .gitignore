@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# AI Docs
+/ai_docs/
+
+# Session Data - Managed by .gitkeep
+/session_data/
+!/session_data/.gitkeep
+!/session_data/audio_cache/.gitkeep
+!/session_data/chromadb/.gitkeep
+
+# Environment variables
+.env
+.env.*
+!.env.example 

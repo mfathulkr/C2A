@@ -1,22 +1,43 @@
 import streamlit as st
 import os
 import shutil
-from src.ars import config, llm_setup, agent_factory
+from src.ars import config
 from src.ars.processor import MediaProcessor
 from src.ars.manager import AIManager
+from src.ars import agent_factory
 
-st.set_page_config(layout="wide", page_title="ARS - Akıllı Raporlama Sistemi")
+# --- Sayfa Yapılandırması ---
+st.set_page_config(page_title="Akıllı Raporlama Sistemi", layout="wide")
 
-# --- Model ve İşlemci Yükleme (Cache ile) ---
-@st.cache_resource
-def load_resources():
-    """Gerekli olan modelleri ve işlemci sınıflarını yükler."""
+# --- Kaynakları ve Oturum Durumlarını Yükleme ---
+
+# AIManager'ı ve MediaProcessor'ı oturum durumunda saklayarak yeniden oluşturulmasını engelliyoruz.
+# AIManager artık LLM ve embedding modellerini kendi içinde başlatıyor.
+if 'manager' not in st.session_state:
     with st.spinner("Yapay zeka modelleri ve kaynaklar hazırlanıyor..."):
-        llm = llm_setup.load_llm()
-        embedding_model = llm_setup.load_embedding_model()
-        media_processor = MediaProcessor()
-        ai_manager = AIManager(llm, embedding_model)
-        return llm, embedding_model, media_processor, ai_manager
+        st.session_state.manager = AIManager()
+
+if 'processor' not in st.session_state:
+    st.session_state.processor = MediaProcessor()
+
+if 'agent' not in st.session_state:
+    st.session_state.agent = None
+
+if 'report_chain' not in st.session_state:
+    st.session_state.report_chain = None
+    
+if 'transcript' not in st.session_state:
+    st.session_state.transcript = None
+
+if 'chunks' not in st.session_state:
+    st.session_state.chunks = None
+    
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+
+# 'screen' durumunu oturumda sakla
+if 'screen' not in st.session_state:
+    st.session_state.screen = config.SCREEN_WELCOME
 
 # --- Oturum Temizleme ---
 def end_analysis_session():
@@ -28,24 +49,21 @@ def end_analysis_session():
 
 # --- Ana Uygulama ---
 
-llm, embedding_model, media_processor, ai_manager = load_resources()
-
-if 'screen' not in st.session_state:
-    st.session_state.screen = 'welcome'
+llm, embedding_model, media_processor, ai_manager = st.session_state.manager.llm, st.session_state.manager.embedding_model, st.session_state.processor, st.session_state.manager
 
 # 1. KARŞILAMA EKRANI
-if st.session_state.screen == 'welcome':
+if st.session_state.screen == config.SCREEN_WELCOME:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<h1 style='text-align: center; font-size: 80px;'>ARS</h1>", unsafe_allow_html=True)
         st.markdown("<h3 style='text-align: center;'>Akıllı Raporlama Sistemi</h3>", unsafe_allow_html=True)
         st.markdown("---")
         if st.button("Yeni Analiz Başlat", use_container_width=True, type="primary"):
-            st.session_state.screen = 'setup'
+            st.session_state.screen = config.SCREEN_SETUP
             st.rerun()
 
 # 2. ANALİZ KURULUM EKRANI
-elif st.session_state.screen == 'setup':
+elif st.session_state.screen == config.SCREEN_SETUP:
     st.title("1. Adım: Analiz Kaynağını Belirleyin")
     source_option = st.radio("Kaynak Tipi:", ["Bilgisayardan Dosya Yükle", "YouTube Linki Kullan"], horizontal=True, label_visibility="collapsed")
     
@@ -63,15 +81,15 @@ elif st.session_state.screen == 'setup':
         if st.button("Analizi Başlat", type="primary", use_container_width=True):
             st.session_state.uploaded_file = uploaded_file
             st.session_state.youtube_url = youtube_url
-            st.session_state.screen = 'processing'
+            st.session_state.screen = config.SCREEN_PROCESSING
             st.rerun()
             
     if st.button("Geri"):
-        st.session_state.screen = 'welcome'
+        st.session_state.screen = config.SCREEN_WELCOME
         st.rerun()
 
 # 3. İŞLEME EKRANI
-elif st.session_state.screen == 'processing':
+elif st.session_state.screen == config.SCREEN_PROCESSING:
     with st.status("Analiz süreci yürütülüyor...", expanded=True) as status:
         try:
             # Temizlik
@@ -102,8 +120,7 @@ elif st.session_state.screen == 'processing':
             # Veritabanlarını Doldurma ve Metni Parçalama
             status.update(label="Metin işleniyor ve veritabanları oluşturuluyor...")
             # populate_databases şimdi parçalanmış dökümanları döndürecek
-            chunks = ai_manager.populate_databases(whisperx_result) 
-            st.session_state.chunks = chunks # Raporlama için parçaları kaydet
+            st.session_state.chunks = ai_manager.populate_databases(whisperx_result) 
 
             # Agent ve Raporlama Zincirini Oluşturma
             status.update(label="Analiz araçları hazırlanıyor...")
@@ -113,7 +130,7 @@ elif st.session_state.screen == 'processing':
             st.session_state.messages = [{"role": "assistant", "content": "Analiz tamamlandı. Kayıt hakkında sorularınızı sorabilir veya bir rapor oluşturmasını isteyebilirsiniz."}]
             
             status.update(label="Analiz başarıyla tamamlandı!", state="complete")
-            st.session_state.screen = 'analysis'
+            st.session_state.screen = config.SCREEN_ANALYSIS
             st.rerun()
 
         except Exception as e:
@@ -122,7 +139,7 @@ elif st.session_state.screen == 'processing':
                 end_analysis_session()
 
 # 4. ANALİZ EKRANI (CHAT & RAPORLAMA)
-elif st.session_state.screen == 'analysis':
+elif st.session_state.screen == config.SCREEN_ANALYSIS:
     st.sidebar.title("Kontrol Paneli")
     st.sidebar.button("Yeni Analiz Yap", on_click=end_analysis_session, use_container_width=True)
     

@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+# .env dosyasındaki ortam değişkenlerini yükle
+load_dotenv()
 
 # --- Genel Oturum Ayarları ---
 SESSION_DATA_PATH = "session_data"
@@ -13,21 +17,54 @@ WHISPER_BATCH_SIZE = 8 # GPU'nuzun VRAM'ine göre ayarlayın. 16, 8GB VRAM için
 # Bu özellik için Hugging Face'den bir API anahtarı (token) gereklidir.
 # https://huggingface.co/settings/tokens adresinden ücretsiz alabilirsiniz.
 # Anahtarınız yoksa bu alanı boş bırakın, hoparlör ayrıştırma atlanacaktır.
-HF_TOKEN = "" 
+HF_TOKEN = os.getenv("HF_TOKEN", "")
 MIN_SPEAKERS = 1
 MAX_SPEAKERS = 5
 
 # --- Neo4j Veritabanı Ayarları ---
 NEO4J_URI = "neo4j://127.0.0.1:7687" 
 NEO4J_USERNAME = "neo4j"
-NEO4J_PASSWORD = "12345678"
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 # --- Ollama Ayarları ---
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_LLM_MODEL = "llama3:8b"
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
 
+# --- Streamlit Arayüz Ayarları ---
+SCREEN_WELCOME = "welcome"
+SCREEN_SETUP = "setup"
+SCREEN_PROCESSING = "processing"
+SCREEN_ANALYSIS = "analysis"
+SCREEN_REPORT = "report"
+SCREEN_CHAT = "chat"
+
 # --- Prompt Şablonları ---
+TRIPLET_EXTRACTION_TEMPLATE = """
+Sen bir metin analistisin. Görevin, verilen metin parçasından Bilgi Grafiği için Bilgi Üçlüleri (head, relation, tail) çıkarmaktır.
+Her üçlü (baş varlık, ilişki, kuyruk varlık) formatında olmalıdır. Varlıkları ve ilişkileri olabildiğince kısa ve öz tut.
+ÖNEMLİ: Çıktın SADECE geçerli bir JSON nesnesi içermelidir. Başka hiçbir metin, açıklama veya not ekleme.
+
+Örnek:
+Metin: "Elon Musk, elektrikli araç üreticisi olan Tesla'yı kurdu ve aynı zamanda SpaceX'in de CEO'sudur."
+Çıktı:
+```json
+{{
+  "triplets": [
+    {{"head": "Elon Musk", "relation": "KURDU", "tail": "Tesla"}},
+    {{"head": "Tesla", "relation": "TÜRÜ", "tail": "Elektrikli Araç Üreticisi"}},
+    {{"head": "Elon Musk", "relation": "CEO", "tail": "SpaceX"}}
+  ]
+}}
+```
+
+Aşağıdaki metinden tüm anlamlı üçlüleri çıkar.
+Metin:
+---
+{text}
+---
+"""
+
 REPORT_PROMPT = """
 Sen, metin analizinden profesyonel ve detaylı raporlar üreten uzman bir asistansın. Sana sağlanan metin parçalarını derinlemesine analiz ederek, aşağıdaki şablona harfiyen uygun, tamamen TÜRKÇE ve zengin içerikli bir rapor oluştur. Kesinlikle kendi yorumlarını veya "Sana verilen metinlere göre..." gibi giriş cümlelerini ekleme. Sadece rapor başlıklarını ve istenen içeriği yaz.
 
