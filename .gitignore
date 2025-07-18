@@ -10,8 +10,6 @@ __pycache__/
 # Session Data - Managed by .gitkeep
 /session_data/
 !/session_data/.gitkeep
-!/session_data/audio_cache/.gitkeep
-!/session_data/chromadb/.gitkeep
 
 # Environment variables
 .env
