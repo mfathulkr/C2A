@@ -66,43 +66,49 @@ Metin:
 """
 
 REPORT_PROMPT = """
-Sen, metin analizinden profesyonel ve detaylı raporlar üreten uzman bir asistansın. Sana sağlanan metin parçalarını derinlemesine analiz ederek, aşağıdaki şablona harfiyen uygun, tamamen TÜRKÇE ve zengin içerikli bir rapor oluştur. Kesinlikle kendi yorumlarını veya "Sana verilen metinlere göre..." gibi giriş cümlelerini ekleme. Sadece rapor başlıklarını ve istenen içeriği yaz.
+Sen, karmaşık metinlerden son derece detaylı, analitik ve kapsamlı raporlar üreten kıdemli bir analiz uzmanısın. Sana sunulan metin özetlerini sentezleyerek, aşağıdaki şablona harfiyen uyan, tamamen TÜRKÇE, zengin içerikli ve derinlemesine bir rapor oluştur. Yorumlarını "verilen metinlere göre" gibi ifadelerle sınırlama, doğrudan analizi sun.
 
 ---
-**Rapor Başlığı:** [Metnin ana temasını yansıtan yaratıcı ve açıklayıcı bir başlık belirle]
+**Rapor Başlığı:** [Metnin ana temasını ve ruhunu yansıtan, profesyonel ve ilgi çekici bir başlık oluştur]
 
 **1. Yönetici Özeti (Executive Summary):**
-Metinlerde tartışılan ana fikirleri, temel argümanları ve genel gidişatı kapsayan, en az 5-6 cümlelik kapsamlı bir özet sun. Bu bölüm, raporun tamamını okumaya vakti olmayan bir yöneticinin dahi konuyu tüm ana hatlarıyla anlayabilmesini sağlamalıdır.
+Metinlerde tartışılan konunun genel çerçevesini, ana argümanları, ortaya çıkan temel sonuçları ve genel gidişatı kapsayan, en az 150 kelimelik yoğun ve kapsamlı bir özet sun. Bu bölüm, raporun tamamını okumaya vakti olmayan bir yöneticinin dahi konuyu tüm kritik hatlarıyla eksiksiz anlayabilmesini sağlamalıdır.
 
-**2. Katılımcılar ve Rolleri:**
-Metinlerde adı geçen veya fikir beyan eden tüm kişi veya grupları listele. Eğer rolleri veya pozisyonları belirtilmişse, bunları da ekle. Eğer belirtilmemişse, "Katılımcı bilgisi bulunmamaktadır." yaz.
+**2. Tartışılan Ana Konular ve Derinlemesine Analizi:**
+Konuşulan her bir ana konuyu bir başlık olarak belirt. Her başlığın altına, konunun tüm detaylarını içeren, en az 3-4 paragraftan oluşan bir analiz ekle. Bu analizde şunları mutlaka yap:
+    - Konuyla ilgili sunulan farklı bakış açılarını ve argümanları karşılaştır.
+    - Varsa, fikir ayrılıklarını veya çelişkili noktaları belirt.
+    - Konunun önemini ve genel bağlamdaki yerini vurgula.
+    - Satır aralarında kalan veya ima edilen düşünceleri ortaya çıkar.
 
-**3. Tartışılan Ana Konular ve Detayları:**
-Konuşulan her bir ana konuyu bir başlık olarak belirt ve altına en az 3-4 maddelik detaylı açıklamalar ekle. Her konunun kilit noktalarını, sunulan farklı bakış açılarını ve önemli argümanları bu bölümde açıkça belirt.
+    * **Konu Başlığı 1:**
+        * [Detaylı analiz paragrafları...]
 
-    *   **Konu Başlığı 1:**
-        *   Detay 1
-        *   Detay 2
-        *   Detay 3
+    * **Konu Başlığı 2:**
+        * [Detaylı analiz paragrafları...]
 
-    *   **Konu Başlığı 2:**
-        *   Detay 1
-        *   Detay 2
-        *   Detay 3
+**3. Alınan Stratejik Kararlar ve Sonuçları:**
+Metinlerde açıkça ifade edilmiş veya üzerinde fikir birliğine varıldığı anlaşılan tüm kararları listele. Her kararın arkasındaki mantığı, hedeflenen sonucu ve olası etkilerini detaylı bir şekilde açıkla. Eğer net bir karar yoksa, "Görüşmeler sonucunda belirgin bir stratejik karar alınmamıştır, ancak şu seçenekler üzerinde durulmuştur..." şeklinde bir analiz yap.
 
-**4. Alınan Kararlar ve Gerekçeleri:**
-Metinlerde açıkça ifade edilmiş veya üzerinde fikir birliğine varıldığı anlaşılan tüm kararları listele. Mümkünse, bu kararların alınma gerekçelerini de kısaca açıkla. Eğer net bir karar yoksa, "Görüşmeler sonucunda belirgin bir karar alınmamıştır." yaz.
+**4. Belirlenen Eylem Adımları ve Sorumluluklar (Action Items):**
+Gelecekte yapılması planlanan tüm görevleri ve eylem adımlarını listele. Her bir eylem adımının ne olduğunu, neden önemli olduğunu ve (varsa) kimin sorumlu olduğunu net bir şekilde ifade et. Görev tanımı yoksa, "Yapılacak spesifik bir görev veya eylem adımı belirlenmemiştir." yaz.
 
-**5. Belirlenen Eylem Adımları (Action Items):**
-Gelecekte yapılması planlanan, sorumlusu olan veya olmayan tüm görevleri ve eylem adımlarını listele. Her bir eylem adımının ne olduğunu net bir şekilde ifade et. Eğer bir görev tanımı yoksa, "Yapılacak bir görev veya eylem adımı belirlenmemiştir." yaz.
+**5. Genel Değerlendirme ve Stratejik Çıkarımlar:**
+Metinlerin genel tonunu (iyimser, karamsar, kararsız vb.), ortaya çıkan ana eğilimleri ve varılan nihai sonucu analiz et. Bu bölüm, basit bir özetin ötesine geçerek, görüşmelerin genel ruhundan ve satır aralarından stratejik çıkarımlar yapmalı ve geleceğe yönelik bir projeksiyon sunmalıdır. Bu bölüm, raporun en analitik kısmı olmalıdır.
 
-**6. Genel Değerlendirme ve Sonuç:**
-Metinlerin genel tonunu (iyimser, karamsar, nötr vb.), ortaya çıkan ana eğilimleri ve varılan nihai sonucu analiz et. Bu bölüm, metinlerin satır aralarındaki anlamı ve genel ruhunu yansıtmalıdır.
+**6. İlişkisel Analiz (Graph Veritabanından):**
+Aşağıda, metindeki ana varlıklar (kişiler, projeler, konular vb.) arasındaki tespit edilen ilişkilerin bir özeti yer almaktadır. Bu bölüm, konular arasındaki gizli bağlantıları ve etkileşimleri anlamanıza yardımcı olur.
+{graph_data}
 ---
 
-İşte analiz edilecek metinler:
+GÖREV: Sana aşağıda "{text}" bloğu içinde, bir metnin farklı bölümlerinden çıkarılmış özetler sunulacak. Bu özetleri sadece tekrar listelemek veya basitçe çevirmek YASAKTIR. Görevin, bu özetlerdeki bilgileri SENTEZLEYEREK, yukarıdaki detaylı rapor şablonuna harfiyen uyan, bütüncül ve yeni bir rapor METNİ OLUŞTURMAKTIR.
+
+İşte sentezlenecek metin özetleri:
 {text}
-""" 
+
+---
+BU RAPORU MUTLAKA TÜRKÇE OLUŞTUR.
+"""
 
 # Prompts
 CHUNK_PROMPT_TEMPLATE = """
@@ -113,7 +119,4 @@ METİN:
 "{text}"
 
 ÖZET:
-"""
-
-FINAL_REPORT_PROMPT_TEMPLATE = """
 """ 

@@ -125,8 +125,11 @@ elif st.session_state.screen == config.SCREEN_PROCESSING:
             # Agent ve Raporlama Zincirini Oluşturma
             status.update(label="Analiz araçları hazırlanıyor...")
             st.session_state.agent_executor = agent_factory.create_agent(llm, embedding_model)
-            # Eski basit zincir yerine map_reduce zincirini oluştur
-            st.session_state.reporting_chain = agent_factory.create_map_reduce_chain(llm)
+            # Map-reduce zincirini graph nesnesiyle birlikte oluştur
+            st.session_state.reporting_chain = agent_factory.create_map_reduce_chain(
+                llm=llm, 
+                graph=ai_manager.graph
+            )
             st.session_state.messages = [{"role": "assistant", "content": "Analiz tamamlandı. Kayıt hakkında sorularınızı sorabilir veya bir rapor oluşturmasını isteyebilirsiniz."}]
             
             status.update(label="Analiz başarıyla tamamlandı!", state="complete")
@@ -148,9 +151,10 @@ elif st.session_state.screen == config.SCREEN_ANALYSIS:
     with st.expander("Tutanak Raporu Oluşturucu", expanded=False):
         if st.button("Toplantı Tutanağı Oluştur", use_container_width=True):
             with st.spinner("Tutanak raporu hazırlanıyor (Bu işlem uzun sürebilir)..."):
-                # Map-Reduce zincirini parçalanmış dökümanlarla çağır
+                # Zincire, beklediği formatta {"input_documents": ...} bir sözlük veriyoruz.
                 response = st.session_state.reporting_chain.invoke({"input_documents": st.session_state.chunks})
-                st.session_state.report = response["output_text"]
+                # Zincir doğrudan metin (str) döndürdüğü için anahtar aramıyoruz.
+                st.session_state.report = response
     
     if "report" in st.session_state:
         st.markdown("---")
