@@ -42,10 +42,65 @@ if 'screen' not in st.session_state:
 # --- Oturum Temizleme ---
 def end_analysis_session():
     """Tüm oturum durumunu ve geçici dosyaları temizler."""
-    st.session_state.clear()
-    if os.path.exists(config.SESSION_DATA_PATH):
-        shutil.rmtree(config.SESSION_DATA_PATH)
-    st.rerun()
+    try:
+        # ChromaDB bağlantılarını kapat
+        if 'agent_executor' in st.session_state:
+            # Agent'ın vector store'unu temizle
+            if hasattr(st.session_state.agent_executor, 'vectorstore'):
+                try:
+                    st.session_state.agent_executor.vectorstore._client.reset()
+                except:
+                    pass
+        
+        # AIManager'ın ChromaDB bağlantılarını temizle
+        if 'manager' in st.session_state:
+            try:
+                # ChromaDB client'ını sıfırla
+                import chromadb
+                chromadb.PersistentClient(path=config.CHROMA_DB_PATH).reset()
+            except:
+                pass
+        
+        # Session state'i temizle
+        st.session_state.clear()
+        
+        # Dosyaları sil (Windows için güvenli silme)
+        if os.path.exists(config.SESSION_DATA_PATH):
+            try:
+                # Önce dosyaları kullanımdan çıkar
+                import time
+                time.sleep(1)  # Kısa bir bekleme
+                
+                # Güvenli silme işlemi
+                def safe_remove(path):
+                    try:
+                        if os.path.isfile(path):
+                            os.unlink(path)
+                        elif os.path.isdir(path):
+                            shutil.rmtree(path)
+                    except PermissionError:
+                        # Dosya kullanımdaysa atla
+                        pass
+                
+                # Recursive olarak tüm dosyaları sil
+                for root, dirs, files in os.walk(config.SESSION_DATA_PATH, topdown=False):
+                    for file in files:
+                        safe_remove(os.path.join(root, file))
+                    for dir in dirs:
+                        safe_remove(os.path.join(root, dir))
+                
+                # Ana klasörü sil
+                safe_remove(config.SESSION_DATA_PATH)
+                
+            except Exception as e:
+                st.warning(f"Bazı dosyalar silinemedi: {e}")
+        
+        # Screen'i welcome'a döndür
+        st.session_state.screen = config.SCREEN_WELCOME
+        
+    except Exception as e:
+        st.error(f"Oturum temizlenirken hata oluştu: {e}")
+        st.session_state.screen = config.SCREEN_WELCOME
 
 # --- Ana Uygulama ---
 
@@ -92,10 +147,42 @@ elif st.session_state.screen == config.SCREEN_SETUP:
 elif st.session_state.screen == config.SCREEN_PROCESSING:
     with st.status("Analiz süreci yürütülüyor...", expanded=True) as status:
         try:
-            # Temizlik
+            # Temizlik - Güvenli silme işlemi
             status.update(label="Eski analiz verileri temizleniyor...")
             if os.path.exists(config.SESSION_DATA_PATH):
-                shutil.rmtree(config.SESSION_DATA_PATH)
+                try:
+                    # Önce ChromaDB bağlantılarını kapat
+                    import chromadb
+                    try:
+                        chromadb.PersistentClient(path=config.CHROMA_DB_PATH).reset()
+                    except:
+                        pass
+                    
+                    # Kısa bir bekleme
+                    import time
+                    time.sleep(1)
+                    
+                    # Güvenli silme
+                    def safe_remove(path):
+                        try:
+                            if os.path.isfile(path):
+                                os.unlink(path)
+                            elif os.path.isdir(path):
+                                shutil.rmtree(path)
+                        except PermissionError:
+                            pass
+                    
+                    for root, dirs, files in os.walk(config.SESSION_DATA_PATH, topdown=False):
+                        for file in files:
+                            safe_remove(os.path.join(root, file))
+                        for dir in dirs:
+                            safe_remove(os.path.join(root, dir))
+                    
+                    safe_remove(config.SESSION_DATA_PATH)
+                    
+                except Exception as e:
+                    st.warning(f"Bazı eski dosyalar silinemedi: {e}")
+            
             os.makedirs(config.AUDIO_CACHE_PATH, exist_ok=True)
             
             # Kaynak işleme (İndirme veya Kaydetme)
@@ -140,11 +227,14 @@ elif st.session_state.screen == config.SCREEN_PROCESSING:
             st.error(f"Analiz sırasında bir hata oluştu: {e}")
             if st.button("Başa Dön"):
                 end_analysis_session()
+                st.rerun()
 
 # 4. ANALİZ EKRANI (CHAT & RAPORLAMA)
 elif st.session_state.screen == config.SCREEN_ANALYSIS:
     st.sidebar.title("Kontrol Paneli")
-    st.sidebar.button("Yeni Analiz Yap", on_click=end_analysis_session, use_container_width=True)
+    if st.sidebar.button("Yeni Analiz Yap", use_container_width=True):
+        end_analysis_session()
+        st.rerun()
     
     st.title("Akıllı Raporlama Sistemi - Analiz Ekranı")
 
